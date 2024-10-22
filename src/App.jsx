@@ -138,8 +138,7 @@ const hlsMachine = setup({
 // video element printed to dom
 // machine is in idle state
 // useEffect fires -> send({ type: "SET_VIDEO_REF", ref: videoRef.current })
-// -> action set videoRef context
-// -> guard isSupported -> target -> listening
+// -> guard isSupported -> action set videoRef context -> target -> listening
 
 function App() {
   const videoRef = useRef(null);
