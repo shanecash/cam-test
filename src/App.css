@@ -1,0 +1,14 @@
+/* Reset default margin and padding */
+body, html {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Ensure the app container takes full viewport */
+.App {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
