@@ -1,144 +1,80 @@
 import { useRef, useEffect } from "react";
 import { useMachine } from "@xstate/react";
 import Hls from "hls.js";
-import { fromCallback, setup } from "xstate";
+import { assign, enqueueActions, fromCallback, sendTo, setup } from "xstate";
 
-const resizeLogic = fromCallback(({ sendBack, receive }) => {
-  const resizeHandler = (event) => {
-    sendBack(event);
-  };
+const isSupported = () => Hls.isSupported;
 
-  window.addEventListener("resize", resizeHandler);
-
-  const removeListener = () => {
-    window.removeEventListener("resize", resizeHandler);
-  };
+const handleListener = fromCallback(({ sendBack, receive }) => {
+  let hls;
 
   receive((event) => {
-    if (event.type === "stopListening") {
-      console.log("Stopping listening");
-      removeListener();
+    if (event.type === "start") {
+      var video = document.getElementById("video");
+
+      var hls = new Hls();
+
+      hls.loadSource("https://fe.tring.al/delta/105/out/u/rdghfhsfhfshs.m3u8");
+
+      hls.attachMedia(video);
+
+      video.play();
+
+      hls.on(Hls.Events.MEDIA_ATTACHED, function () {
+        console.log("video and hls.js are now bound together !");
+      });
+    }
+
+    if (event.type === "stop") {
+      hls.destroy();
     }
   });
 
   return () => {
-    console.log("Cleaning up");
-    removeListener();
+    hls.destroy();
   };
 });
 
-const isSupported = () => Hls.isSupported;
-
-const runListener = fromCallback(({ sendBack, receive, input }) => {
-  //const videoElement = input.videoRef.current;
-  //if (videoElement) {
-  //console.log("Video ID:", videoElement.id);
-  //}
-  //console.log(input.videoRef);
-  // If you are using the ESM version of the library (hls.mjs), you
-  // should specify the "workerPath" config option here if you want
-  // web workers to be used. Note that bundlers (such as webpack)
-  // will likely use the ESM version by default.
-  //var hls = new Hls();
-  // bind them together
-  //hls.attachMedia(video);
-  // MEDIA_ATTACHED event is fired by hls object once MediaSource is ready
-  //hls.on(Hls.Events.MEDIA_ATTACHED, function () {
-  //console.log("video and hls.js are now bound together !");
-  //});
-  //console.log("gonna listen");
-  /*
-    var hls = new Hls();
-
-    hls.on(Hls.Events.MEDIA_ATTACHED, function () {
-      console.log("video and hls.js are now bound together !");
-    });
-
-    return () => {};
-    */
-});
-
-function setHlsMachine() {
-  const hlsMachine = setup({
-    actors: {
-      runListener,
-    },
-    guards: {
-      isSupported,
-    },
-  }).createMachine({
-    id: "hls",
-    initial: "init",
-    states: {
-      init: {
-        on: {
-          LISTEN: {
-            target: "listening",
-          },
-        },
-        /*
-        entry: [
-          {
-            guard: "isSupported",
-            target: "listening",
-          },
-          {
-            target: "notSupported",
-          },
-        ],
-        */
-      },
-      listening: {},
-      notSupported: {
-        type: "final",
-      },
-    },
-  });
-
-  return hlsMachine;
-}
-
 const hlsMachine = setup({
   actors: {
-    runListener,
+    handleListener,
   },
   guards: {
     isSupported,
   },
 }).createMachine({
   id: "hls",
-  initial: "init",
+  initial: "idle",
+  context: {
+    videoRef: undefined,
+  },
+  invoke: {
+    id: "listener",
+    src: "handleListener",
+  },
   states: {
-    init: {
+    idle: {
       on: {
-        LISTEN: {
-          target: "listening",
-        },
+        SET_VIDEO_REF: [
+          {
+            guard: "isSupported",
+            actions: [
+              sendTo("listener", ({ context, event }) => {
+                return { type: "start", data: event.ref };
+              }),
+            ],
+          },
+          {
+            target: "notSupported",
+          },
+        ],
       },
-      /*
-      entry: [
-        {
-          guard: "isSupported",
-          target: "listening",
-        },
-        {
-          target: "notSupported",
-        },
-      ],
-      */
     },
-    listening: {},
     notSupported: {
       type: "final",
     },
   },
 });
-
-// function called
-// video element printed to dom
-// machine is in idle state
-// useEffect fires -> send({ type: "SET_VIDEO_REF", ref: videoRef.current })
-// -> guard isSupported -> action set videoRef context -> target -> listening
 
 function App() {
   const videoRef = useRef(null);
@@ -146,14 +82,10 @@ function App() {
   const [state, send] = useMachine(hlsMachine);
 
   useEffect(() => {
-    console.log(videoRef.current);
-  }, [videoRef]);
-
-  //useEffect(() => {
-  //if (state.matches("init") && videoRef.current) {
-  //send({ type: "LISTEN" });
-  //}
-  //}, [state, videoRef, send]);
+    if (state.matches("idle") && videoRef.current) {
+      send({ type: "SET_VIDEO_REF", ref: videoRef.current });
+    }
+  }, [state.value, videoRef, send]);
 
   return (
     <div className="App" style={{ margin: 0, padding: 0, overflow: "hidden" }}>
