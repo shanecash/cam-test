@@ -1,7 +1,27 @@
 /* Reset default margin and padding */
-body, html {
+body,
+html {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  background-color: #1a1a1a;
+  color: white;
 }
 
+.loading-message {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: white;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.offline-message {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: white;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 10px;
+  border-radius: 5px;
+}
