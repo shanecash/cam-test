@@ -10,8 +10,10 @@ const handleListener = fromCallback(({ sendBack, receive }) => {
 
   receive((event) => {
     if (event.type === "start") {
-      const src =
-        "https://bcovlive-a.akamaihd.net/1ad942d15d9643bea6d199b729e79e48/us-east-1/6183977686001/profile_1/chunklist.m3u8";
+      const src = "https://stream3.camara.gov.br/tv1/manifest.m3u8";
+
+      //const src =
+      //"https://bcovlive-a.akamaihd.net/1ad942d15d9643bea6d199b729e79e48/us-east-1/6183977686001/profile_1/chunklist.m3u8";
 
       var video = document.getElementById("video");
 
@@ -26,6 +28,10 @@ const handleListener = fromCallback(({ sendBack, receive }) => {
           console.log(event);
           console.log(`HLS Event: ${hlsEvent}`, data);
         });
+      });
+
+      hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        sendBack({ type: "FRAG_BUFFERED" });
       });
 
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -116,6 +122,9 @@ const hlsMachine = setup({
             target: "notSupported",
           },
         ],
+        FRAG_BUFFERED: {
+          target: "playing",
+        },
         MANIFEST_LOAD_ERROR: {
           target: "retryManifest",
         },
@@ -127,6 +136,7 @@ const hlsMachine = setup({
         },
       },
     },
+    playing: {},
     retryManifest: {},
     notSupported: {
       type: "final",
@@ -152,7 +162,7 @@ function App() {
         style={{ width: "100vw", height: "100vh", overflow: "hidden" }}
       >
         {state.matches("retryManifest") && (
-          <div className="loading-message">Offline</div>
+          <div className="offline-message">Offline</div>
         )}
         {state.matches("idle") && (
           <div className="loading-message">Loading</div>
