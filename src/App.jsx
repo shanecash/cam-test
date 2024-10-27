@@ -61,6 +61,11 @@ const handleListener = fromCallback(({ sendBack, receive }) => {
       });
     }
 
+    if (event.type === "STREAMING_POLL") {
+      console.log("!!!!STREAMINGPOLL!!!!");
+      sendBack({ type: "POLL" });
+    }
+
     if (event.type === "stop") {
       hls.destroy();
     }
@@ -133,7 +138,29 @@ const hlsMachine = setup({
             },
           },
         },
-        streaming: {},
+        streaming: {
+          initial: "polling",
+          states: {
+            polling: {
+              on: {
+                POLL: {
+                  actions: () => console.log("hi"),
+                  reenter: true,
+                  target: "polling",
+                },
+              },
+              after: {
+                2000: {
+                  actions: [
+                    sendTo("listener", () => {
+                      return { type: "STREAMING_POLL" };
+                    }),
+                  ],
+                },
+              },
+            },
+          },
+        },
       },
     },
     retryManifest: {},
