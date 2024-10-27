@@ -30,15 +30,18 @@ const handleListener = fromCallback(({ sendBack, receive }) => {
         });
       });
 
+      hls.on(Hls.Events.MANIFEST_LOADED, function () {
+        sendBack({
+          type: "MANIFEST_LOADED",
+        });
+        video.play();
+      });
+
       hls.on(Hls.Events.FRAG_BUFFERED, () => {
         sendBack({ type: "FRAG_BUFFERED" });
       });
 
       hls.on(Hls.Events.ERROR, (event, data) => {
-        var errorType = data.type;
-        var errorDetails = data.details;
-        var errorFatal = data.fatal;
-
         switch (data.details) {
           case Hls.ErrorDetails.MANIFEST_LOAD_ERROR:
             console.error(src, "manifest load error");
@@ -55,27 +58,6 @@ const handleListener = fromCallback(({ sendBack, receive }) => {
           default:
             break;
         }
-      });
-
-      /*
-      hls.on(Hls.Events.BUFFER_APPENDED, function () {
-        console.log("Data appended to buffer.");
-      });
-
-      hls.on(Hls.Events.BUFFER_STALLED, function () {
-        console.log("Buffer is stalled, waiting for data...");
-      });
-
-      hls.on(Hls.Events.BUFFER_APPENDING, function () {
-        console.log("Appending data to buffer...");
-      });
-      */
-
-      hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
-        console.log(
-          "Manifest loaded, found " + data.levels.length + " quality levels"
-        );
-        video.play();
       });
     }
 
@@ -98,7 +80,7 @@ const hlsMachine = setup({
   },
 }).createMachine({
   id: "hls",
-  initial: "idle",
+  initial: "initializing",
   context: {
     videoRef: undefined,
   },
@@ -107,7 +89,7 @@ const hlsMachine = setup({
     src: "handleListener",
   },
   states: {
-    idle: {
+    initializing: {
       on: {
         SET_VIDEO_REF: [
           {
@@ -117,13 +99,18 @@ const hlsMachine = setup({
                 return { type: "start", data: event.ref };
               }),
             ],
+            target: "connecting",
           },
           {
             target: "notSupported",
           },
         ],
-        FRAG_BUFFERED: {
-          target: "playing",
+      },
+    },
+    connecting: {
+      on: {
+        MANIFEST_LOADED: {
+          target: "connected",
         },
         MANIFEST_LOAD_ERROR: {
           target: "retryManifest",
@@ -136,7 +123,19 @@ const hlsMachine = setup({
         },
       },
     },
-    playing: {},
+    connected: {
+      initial: "buffering",
+      states: {
+        buffering: {
+          on: {
+            FRAG_BUFFERED: {
+              target: "streaming",
+            },
+          },
+        },
+        streaming: {},
+      },
+    },
     retryManifest: {},
     notSupported: {
       type: "final",
@@ -150,7 +149,7 @@ function App() {
   const [state, send] = useMachine(hlsMachine);
 
   useEffect(() => {
-    if (state.value === "idle" && videoRef.current) {
+    if (state.value === "initializing" && videoRef.current) {
       send({ type: "SET_VIDEO_REF", ref: videoRef.current });
     }
   }, [state.value, videoRef, send]);
@@ -161,11 +160,14 @@ function App() {
         className="container"
         style={{ width: "100vw", height: "100vh", overflow: "hidden" }}
       >
+        {state.matches("connected.buffering") && (
+          <div className="offline-message">Buffering</div>
+        )}
         {state.matches("retryManifest") && (
           <div className="offline-message">Offline</div>
         )}
-        {state.matches("idle") && (
-          <div className="loading-message">Loading</div>
+        {state.matches("connecting") && (
+          <div className="loading-message">Connecting</div>
         )}
         <video
           id="video"
