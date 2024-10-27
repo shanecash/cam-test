@@ -8,16 +8,26 @@ const isSupported = () => Hls.isSupported;
 const handleListener = fromCallback(({ sendBack, receive }) => {
   let hls;
 
-  receive((event) => {
+  console.log("handleListener!!!!!!!!!!!!!!!!");
+
+  let lastFragChangeTime = null;
+
+  receive((event, hls) => {
     if (event.type === "start") {
-      const src = "https://stream3.camara.gov.br/tv1/manifest.m3u8";
+      const src =
+        "https://abplivetv.akamaized.net/hls/live/2043010/hindi/master.m3u8";
+
+      // const src =
+      // "https://redir.cache.orange.pl/jupiter/o1-cl7/ssl/live/tvrepublika/live.m3u8";
+
+      // const src = "https://stream3.camara.gov.br/tv1/manifest.m3u8";
 
       //const src =
       //"https://bcovlive-a.akamaihd.net/1ad942d15d9643bea6d199b729e79e48/us-east-1/6183977686001/profile_1/chunklist.m3u8";
 
       var video = document.getElementById("video");
 
-      var hls = new Hls();
+      hls = new Hls();
 
       hls.loadSource(src);
 
@@ -41,6 +51,12 @@ const handleListener = fromCallback(({ sendBack, receive }) => {
         sendBack({ type: "FRAG_BUFFERED" });
       });
 
+      hls.on(Hls.Events.FRAG_CHANGED, () => {
+        console.log("FRAG_CHANGED");
+        console.log(video.currentTime);
+        lastFragChangeTime = video.currentTime;
+      });
+
       hls.on(Hls.Events.ERROR, (event, data) => {
         switch (data.details) {
           case Hls.ErrorDetails.MANIFEST_LOAD_ERROR:
@@ -62,6 +78,15 @@ const handleListener = fromCallback(({ sendBack, receive }) => {
     }
 
     if (event.type === "STREAMING_POLL") {
+      console.log("lastFragChangeTime", lastFragChangeTime);
+      if (lastFragChangeTime) {
+        console.log("lastFragChangeTime", lastFragChangeTime);
+        const FREEZE_THRESHOLD = 2000;
+        const timeSinceLastFragment = Date.now() - lastFragChangeTime;
+        if (timeSinceLastFragment < FREEZE_THRESHOLD) {
+          console.log("stream is frozen");
+        }
+      }
       console.log("!!!!STREAMINGPOLL!!!!");
       sendBack({ type: "POLL" });
     }
