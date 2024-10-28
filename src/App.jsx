@@ -10,13 +10,13 @@ const handleListener = fromCallback(({ sendBack, receive }) => {
 
   receive((event) => {
     if (event.type === "start") {
-      //const src =
-      //"https://abplivetv.akamaized.net/hls/live/2043010/hindi/master.m3u8";
+      const src =
+        "https://abplivetv.akamaized.net/hls/live/2043010/hindi/master.m3u8";
 
       // const src =
       // "https://redir.cache.orange.pl/jupiter/o1-cl7/ssl/live/tvrepublika/live.m3u8";
 
-      const src = "https://stream3.camara.gov.br/tv1/manifest.m3u8";
+      //const src = "https://stream3.camara.gov.br/tv1/manifest.m3u8";
 
       //const src =
       //"https://bcovlive-a.akamaihd.net/1ad942d15d9643bea6d199b729e79e48/us-east-1/6183977686001/profile_1/chunklist.m3u8";
@@ -91,13 +91,8 @@ const handleListener = fromCallback(({ sendBack, receive }) => {
         console.log("current video time:", event.videoRef.currentTime);
 
         if (event.videoRef.currentTime === event.videoCurrentTime) {
-          //console.log(
-          //"Stream appears frozen - no new fragments for",
-          //timeSinceLastFragment,
-          //"ms"
-          //);
           console.log("STREAM APPEARS FROZEN");
-          sendBack({ type: "STREAM_FROZEN" });
+          sendBack({ type: "BUFFERING" });
         }
       }
       sendBack({ type: "POLL", videoCurrentTime: event.videoRef.currentTime });
@@ -170,9 +165,9 @@ const hlsMachine = setup({
       },
     },
     connected: {
-      initial: "buffering",
+      initial: "initialBuffering",
       states: {
-        buffering: {
+        initialBuffering: {
           on: {
             FRAG_BUFFERED: {
               target: "streaming",
@@ -184,6 +179,9 @@ const hlsMachine = setup({
           states: {
             polling: {
               on: {
+                BUFFERING: {
+                  target: "#buffering",
+                },
                 FRAG_LOADED: {},
                 FRAG_CHANGED: {},
                 LEVEL_LOADED: {
@@ -200,7 +198,7 @@ const hlsMachine = setup({
                 },
               },
               after: {
-                2000: {
+                1000: {
                   actions: [
                     sendTo("listener", ({ context }) => {
                       return {
@@ -213,6 +211,12 @@ const hlsMachine = setup({
                 },
               },
             },
+          },
+        },
+        buffering: {
+          id: "buffering",
+          on: {
+            FRAG_CHANGED: { target: "streaming" },
           },
         },
       },
@@ -243,6 +247,9 @@ function App() {
       >
         {state.matches("connected.buffering") && (
           <div className="offline-message">Buffering</div>
+        )}
+        {state.matches("connected.initialBuffering") && (
+          <div className="offline-message">Initial Buffering</div>
         )}
         {state.matches("retryManifest") && (
           <div className="offline-message">Offline</div>
