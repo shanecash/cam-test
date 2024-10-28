@@ -6,12 +6,14 @@ import { assign, enqueueActions, fromCallback, sendTo, setup } from "xstate";
 const isSupported = () => Hls.isSupported;
 
 const handleListener = fromCallback(({ sendBack, receive }) => {
-  let lastFragChangeTime = null;
+  let hls = undefined;
 
   receive((event) => {
     if (event.type === "start") {
-      const src =
-        "https://abplivetv.akamaized.net/hls/live/2043010/hindi/master.m3u8";
+      const src = import.meta.env.VITE_STREAM_URL;
+
+      // const src =
+      // "https://abplivetv.akamaized.net/hls/live/2043010/hindi/master.m3u8";
 
       // const src =
       // "https://redir.cache.orange.pl/jupiter/o1-cl7/ssl/live/tvrepublika/live.m3u8";
@@ -23,7 +25,14 @@ const handleListener = fromCallback(({ sendBack, receive }) => {
 
       var video = event.ref;
 
-      var hls = new Hls();
+      var hls = new Hls({
+        xhrSetup: (xhr) => {
+          xhr.setRequestHeader(
+            "Authorization",
+            `Bearer ${import.meta.env.VITE_ACCESS_TOKEN}`
+          );
+        },
+      });
 
       hls.loadSource(src);
 
@@ -119,6 +128,7 @@ const hlsMachine = setup({
   id: "hls",
   initial: "initializing",
   context: {
+    hls: undefined,
     videoCurrentTime: undefined,
     videoRef: undefined,
   },
