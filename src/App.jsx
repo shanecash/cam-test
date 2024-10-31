@@ -37,21 +37,9 @@ const listener = fromCallback(({ sendBack, input }) => {
   });
 
   hls.on(Hls.Events.ERROR, (event, data) => {
-    switch (data.details) {
-      case Hls.ErrorDetails.MANIFEST_LOAD_ERROR:
-        console.error(input.videoSrc, "manifest load error");
-        sendBack({ type: "MANIFEST_LOAD_ERROR" });
-        break;
-      case Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT:
-        console.error(input.videoSrc, "manifest load timeout");
-        sendBack({ type: "MANIFEST_LOAD_TIMEOUT" });
-        break;
-      case Hls.ErrorDetails.MANIFEST_PARSING_ERROR:
-        console.error(input.videoSrc, "manifest parsing error");
-        sendBack({ type: "MANIFEST_PARSING_ERROR" });
-        break;
-      default:
-        break;
+    if (data.fatal) {
+      sendBack({ type: "FATAL_ERROR" });
+      return;
     }
   });
 
@@ -111,20 +99,14 @@ const hlsMachine = setup({
           videoSrc: context.videoSrc,
         }),
       },
+      on: {
+        FATAL_ERROR: { target: "#retrying" },
+      },
       states: {
         connecting: {
           on: {
             MANIFEST_LOADED: {
               target: "connected",
-            },
-            MANIFEST_LOAD_ERROR: {
-              target: "#retry",
-            },
-            MANIFEST_LOAD_TIMEOUT: {
-              target: "#retry",
-            },
-            MANIFEST_PARSING_ERROR: {
-              target: "#retry",
             },
           },
         },
@@ -158,8 +140,13 @@ const hlsMachine = setup({
         },
       },
     },
-    retry: {
-      id: "retry",
+    retrying: {
+      id: "retrying",
+      after: {
+        5000: {
+          target: "started",
+        },
+      },
     },
     notSupported: {
       type: "final",
@@ -218,9 +205,7 @@ function App() {
         {state.matches("started.connected.buffering") && (
           <div className="state">Connected - Buffering</div>
         )}
-        {state.matches("started.retrying") && (
-          <div className="state">Retrying</div>
-        )}
+        {state.matches("retrying") && <div className="state">Retrying</div>}
         <video
           id="video"
           ref={videoRef}
