@@ -1,11 +1,11 @@
 import { useRef, useEffect } from "react";
-import { useActor, useMachine } from "@xstate/react";
+import { useActor } from "@xstate/react";
 import Hls from "hls.js";
-import { assign, enqueueActions, fromCallback, sendTo, setup } from "xstate";
+import { fromCallback, setup } from "xstate";
 
 const isHlsSupported = () => Hls.isSupported;
 
-const listener = fromCallback(({ sendBack, receive, input }) => {
+const listener = fromCallback(({ sendBack, input }) => {
   let hls = new Hls({
     //xhrSetup: (xhr) => {
     //xhr.setRequestHeader(
@@ -26,8 +26,51 @@ const listener = fromCallback(({ sendBack, receive, input }) => {
     });
   });
 
+  hls.on(Hls.Events.MANIFEST_LOADED, function () {
+    sendBack({
+      type: "MANIFEST_LOADED",
+    });
+  });
+
+  hls.on(Hls.Events.FRAG_BUFFERED, () => {
+    sendBack({ type: "FRAG_BUFFERED" });
+  });
+
+  hls.on(Hls.Events.ERROR, (event, data) => {
+    switch (data.details) {
+      case Hls.ErrorDetails.MANIFEST_LOAD_ERROR:
+        console.error(input.videoSrc, "manifest load error");
+        sendBack({ type: "MANIFEST_LOAD_ERROR" });
+        break;
+      case Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT:
+        console.error(input.videoSrc, "manifest load timeout");
+        sendBack({ type: "MANIFEST_LOAD_TIMEOUT" });
+        break;
+      case Hls.ErrorDetails.MANIFEST_PARSING_ERROR:
+        console.error(input.videoSrc, "manifest parsing error");
+        sendBack({ type: "MANIFEST_PARSING_ERROR" });
+        break;
+      default:
+        break;
+    }
+  });
+
+  const handlePlaying = () => {
+    sendBack({ type: "VIDEO_PLAYING" });
+  };
+
+  const handleWaiting = () => {
+    sendBack({ type: "VIDEO_BUFFERING" });
+  };
+
+  input.videoRef.current.addEventListener("playing", handlePlaying);
+  input.videoRef.current.addEventListener("waiting", handleWaiting);
+
   return () => {
     hls.destroy();
+
+    input.videoRef.current.removeEventListener("playing", handlePlaying);
+    input.videoRef.current.removeEventListener("waiting", handleWaiting);
   };
 });
 
@@ -59,6 +102,7 @@ const hlsMachine = setup({
   states: {
     starting: {},
     started: {
+      initial: "connecting",
       invoke: {
         id: "listener",
         src: "listener",
@@ -67,8 +111,59 @@ const hlsMachine = setup({
           videoSrc: context.videoSrc,
         }),
       },
+      states: {
+        connecting: {
+          on: {
+            MANIFEST_LOADED: {
+              target: "connected",
+            },
+            MANIFEST_LOAD_ERROR: {
+              target: "#retry",
+            },
+            MANIFEST_LOAD_TIMEOUT: {
+              target: "#retry",
+            },
+            MANIFEST_PARSING_ERROR: {
+              target: "#retry",
+            },
+          },
+        },
+        connected: {
+          id: "connected",
+          initial: "initialBuffering",
+          states: {
+            initialBuffering: {
+              on: {
+                FRAG_BUFFERED: {
+                  target: "streaming",
+                },
+              },
+            },
+            streaming: {
+              on: {
+                BUFFERING: {
+                  target: "buffering",
+                },
+                VIDEO_BUFFERING: {
+                  target: "buffering",
+                },
+              },
+            },
+            buffering: {
+              on: {
+                VIDEO_PLAYING: { target: "streaming" },
+              },
+            },
+          },
+        },
+      },
     },
-    notSupported: {},
+    retry: {
+      id: "retry",
+    },
+    notSupported: {
+      type: "final",
+    },
   },
 });
 
@@ -108,7 +203,24 @@ function App() {
         className="container"
         style={{ width: "100vw", height: "100vh", overflow: "hidden" }}
       >
-        {state.matches("starting") && <>Starting</>}
+        {state.matches("notSupported") && (
+          <div className="state">HLS player is not supported</div>
+        )}
+        {state.matches("started.connecting") && (
+          <div className="state">Connecting</div>
+        )}
+        {state.matches("started.connected.initialBuffering") && (
+          <div className="state">Connected - Initial Buffering</div>
+        )}
+        {state.matches("started.connected.streaming") && (
+          <div className="state">Connected - Streaming</div>
+        )}
+        {state.matches("started.connected.buffering") && (
+          <div className="state">Connected - Buffering</div>
+        )}
+        {state.matches("started.retrying") && (
+          <div className="state">Retrying</div>
+        )}
         <video
           id="video"
           ref={videoRef}

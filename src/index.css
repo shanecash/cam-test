@@ -8,8 +8,7 @@ html {
   color: white;
 }
 
-.loading-message,
-.offline-message {
+.state {
   position: absolute;
   top: 50%;
   left: 50%;
